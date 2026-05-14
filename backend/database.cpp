@@ -1,14 +1,64 @@
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include "database.h"
 
 using namespace std;
 using namespace pqxx;
 
+namespace {
+string trim(const string& value) {
+    const auto first = find_if_not(value.begin(), value.end(), [](unsigned char ch) {
+        return isspace(ch);
+    });
+
+    const auto last = find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
+        return isspace(ch);
+    }).base();
+
+    if (first >= last) {
+        return "";
+    }
+
+    return string(first, last);
+}
+
+string getEnvOrDefault(const char* key, const string& fallback) {
+    const char* value = getenv(key);
+
+    if (value == nullptr) {
+        return fallback;
+    }
+
+    const string cleanValue = trim(value);
+    return cleanValue.empty() ? fallback : cleanValue;
+}
+
+string buildConnectionString() {
+    const string dbName = getEnvOrDefault("POS_DB_NAME", "pos_system");
+    const string user = getEnvOrDefault("POS_DB_USER", "pos_user");
+    const string password = getEnvOrDefault("POS_DB_PASSWORD", "possystem");
+    const string host = getEnvOrDefault("POS_DB_HOST", "");
+    const string port = getEnvOrDefault("POS_DB_PORT", "5433");
+
+    string connectionString =
+        "dbname=" + dbName +
+        " user=" + user +
+        " password=" + password +
+        " port=" + port;
+
+    if (!host.empty()) {
+        connectionString += " host=" + host;
+    }
+
+    return connectionString;
+}
+}
+
 Database::Database()
-        : conn(
-           "dbname=pos_system user=pos_user password=possystem port=5433" 
-        ) 
+        : conn(buildConnectionString()) 
         {
             if(conn.is_open()) {
                 cout<<"Database connected!\n";
@@ -33,11 +83,30 @@ string Database::login(const string& username, const string& password) {
 }
 
 void Database::addUser(const string& username, const string& password, const string& role) {
+    const string cleanUsername = trim(username);
+    const string cleanPassword = trim(password);
+    const string cleanRole = trim(role);
+
+    if (cleanUsername.empty()) {
+        cout << "Username cannot be empty.\n";
+        return;
+    }
+
+    if (cleanPassword.empty()) {
+        cout << "Password cannot be empty.\n";
+        return;
+    }
+
+    if (cleanRole != "admin" && cleanRole != "cashier") {
+        cout << "Role must be either 'admin' or 'cashier'.\n";
+        return;
+    }
+
     work txn(conn);
 
     txn.exec(
         "INSERT INTO users (username, password, role) VALUES ($1, $2, $3)",
-        pqxx::params(username, password, role)
+        pqxx::params(cleanUsername, cleanPassword, cleanRole)
     );
 
     txn.commit();
@@ -45,14 +114,27 @@ void Database::addUser(const string& username, const string& password, const str
 }
 
 void Database::removeUser(const string& username) {
+    const string cleanUsername = trim(username);
+
+    if (cleanUsername.empty()) {
+        cout << "Username cannot be empty.\n";
+        return;
+    }
+
     work txn(conn);
 
-    txn.exec(
+    result res = txn.exec(
         "DELETE FROM users WHERE username = $1",
-        pqxx::params(username)
+        pqxx::params(cleanUsername)
     );
 
     txn.commit();
+
+    if (res.affected_rows() == 0) {
+        cout << "User not found.\n";
+        return;
+    }
+
     cout << "User removed successfully!\n";
 }
 
@@ -83,16 +165,34 @@ void Database::viewUsers() {
 }
 
 void Database::addProduct(int id, const std::string& name, float price, int stock) {
+    const string cleanName = trim(name);
+
+    if (id <= 0) {
+        cout << "Product ID must be greater than 0.\n";
+        return;
+    }
+
+    if (cleanName.empty()) {
+        cout << "Product name cannot be empty.\n";
+        return;
+    }
+
+    if (price < 0) {
+        cout << "Price cannot be negative.\n";
+        return;
+    }
+
+    if (stock < 0) {
+        cout << "Stock cannot be negative.\n";
+        return;
+    }
+
     work txn(conn);
 
-    string query = 
-        "INSERT INTO products(id, name, price, stock) VALUES(" +
-        to_string(id) + ",'" +
-        name + "', " +
-        to_string(price) + ", " +
-        to_string(stock) + ");";
-
-    txn.exec(query);
+    txn.exec(
+        "INSERT INTO products(id, name, price, stock) VALUES($1, $2, $3, $4)",
+        pqxx::params(id, cleanName, price, stock)
+    );
     txn.commit();
 
     cout << "Product Added to Database\n";
@@ -128,10 +228,17 @@ void Database::viewProducts() {
 }
 
 void Database::searchProduct(int id) {
+    if (id <= 0) {
+        cout << "Product ID must be greater than 0.\n";
+        return;
+    }
+
     nontransaction txn(conn);
 
-    string query = "SELECT * FROM products WHERE id = " + to_string(id);
-    result res = txn.exec(query);
+    result res = txn.exec(
+        "SELECT * FROM products WHERE id = $1",
+        pqxx::params(id)
+    );
 
     if(res.empty()) {
         cout << "Product Not Found\n";
@@ -163,38 +270,71 @@ void Database::searchProduct(int id) {
 }
 
 void Database::updateStock(int id, int newStock) {
+    if (id <= 0) {
+        cout << "Product ID must be greater than 0.\n";
+        return;
+    }
+
+    if (newStock < 0) {
+        cout << "Stock cannot be negative.\n";
+        return;
+    }
+
     work txn(conn);
 
-    string query = 
-        "UPDATE products SET stock = " + to_string(newStock) 
-        + " WHERE id = " + to_string(id);
-
-    txn.exec(query);
+    result res = txn.exec(
+        "UPDATE products SET stock = $1 WHERE id = $2",
+        pqxx::params(newStock, id)
+    );
     txn.commit();
+
+    if (res.affected_rows() == 0) {
+        cout << "Product not found.\n";
+        return;
+    }
 
     cout << "Stock updated successfully!\n";
 }
 
 void Database::deleteProduct(int id) {
+    if (id <= 0) {
+        cout << "Product ID must be greater than 0.\n";
+        return;
+    }
+
     work txn(conn);
 
-    string query = "DELETE FROM products WHERE id = " + to_string(id);
-
-    txn.exec(query);
+    result res = txn.exec(
+        "DELETE FROM products WHERE id = $1",
+        pqxx::params(id)
+    );
     txn.commit();
-    
+
+    if (res.affected_rows() == 0) {
+        cout << "Product not found.\n";
+        return;
+    }
+
     cout << "Product deleted successfully!\n";
 }
 
 void Database::sellProduct(int id, int qty) {
+    if (id <= 0) {
+        cout << "Product ID must be greater than 0.\n";
+        return;
+    }
+
+    if (qty <= 0) {
+        cout << "Quantity must be greater than 0.\n";
+        return;
+    }
 
     work txn(conn);
 
-    string query =
-        "SELECT * FROM products WHERE id = " +
-        to_string(id);
-
-    result res = txn.exec(query);
+    result res = txn.exec(
+        "SELECT * FROM products WHERE id = $1",
+        pqxx::params(id)
+    );
 
     if(res.empty()) {
 
@@ -223,23 +363,16 @@ void Database::sellProduct(int id, int qty) {
 
     int newStock = stock - qty;
 
-    string updateQuery =
-        "UPDATE products SET stock = " +
-        to_string(newStock) +
-        " WHERE id = " +
-        to_string(id);
+    txn.exec(
+        "UPDATE products SET stock = $1 WHERE id = $2",
+        pqxx::params(newStock, id)
+    );
 
-    txn.exec(updateQuery);
-
-    string saleQuery =
-        "INSERT INTO sales(product_id, product_name, quantity, total) VALUES(" +
-        to_string(id) + ", '" +
-        name + "', " +
-        to_string(qty) + ", " +
-        to_string(total) + ") RETURNING invoice_no, created_at;";
-
-    result saleRes =
-        txn.exec(saleQuery);
+    result saleRes = txn.exec(
+        "INSERT INTO sales(product_id, product_name, quantity, total) "
+        "VALUES($1, $2, $3, $4) RETURNING invoice_no, created_at",
+        pqxx::params(id, name, qty, total)
+    );
 
     txn.commit();
 
@@ -321,7 +454,7 @@ void Database::dailyRevenue() {
         );
 
     float revenue =
-        res[0]["revenue"].as<float>();
+        res[0]["revenue"].is_null() ? 0.0f : res[0]["revenue"].as<float>();
 
     cout << "\n===== DAILY REVENUE =====\n";
 

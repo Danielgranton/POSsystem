@@ -1,0 +1,13 @@
+# Build outputs
+backend/pos
+backend/pos_test
+*.o
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.DS_Store
+Thumbs.db

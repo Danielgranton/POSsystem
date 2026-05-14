@@ -1,10 +1,37 @@
 #include <iostream>
 #include <iomanip>
+#include <limits>
 #include <termios.h>
 #include <unistd.h>
 #include "database.h"
 
 using namespace std;
+
+bool readInt(const string& prompt, int& value) {
+    cout << prompt;
+
+    if (cin >> value) {
+        return true;
+    }
+
+    cin.clear();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "Invalid number entered.\n";
+    return false;
+}
+
+bool readFloat(const string& prompt, float& value) {
+    cout << prompt;
+
+    if (cin >> value) {
+        return true;
+    }
+
+    cin.clear();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "Invalid price entered.\n";
+    return false;
+}
 
 string getHiddenPassword() {
     termios oldt, newt;
@@ -41,8 +68,9 @@ void adminMenu(Database& db) {
         cout << "11. Add User\n";
         cout << "12. Remove User\n";
         cout << "13. Exit\n";
-        cout << "Enter choice: ";
-        cin >> choice;
+        if (!readInt("Enter choice: ", choice)) {
+            continue;
+        }
 
         switch (choice) {
             case 1:
@@ -54,18 +82,41 @@ void adminMenu(Database& db) {
                 string name;
                 float price;
 
-                cout << "Enter Product ID: ";
-                cin >> id;
+                if (!readInt("Enter Product ID: ", id)) {
+                    break;
+                }
                 cin.ignore();
 
                 cout << "Enter Product Name: ";
                 getline(cin, name);
 
-                cout << "Enter Price: ";
-                cin >> price;
+                if (!readFloat("Enter Price: ", price)) {
+                    break;
+                }
 
-                cout << "Enter Stock: ";
-                cin >> stock;
+                if (id <= 0) {
+                    cout << "Product ID must be greater than 0.\n";
+                    break;
+                }
+
+                if (name.find_first_not_of(" \t\r\n") == string::npos) {
+                    cout << "Product name cannot be empty.\n";
+                    break;
+                }
+
+                if (price < 0) {
+                    cout << "Price cannot be negative.\n";
+                    break;
+                }
+
+                if (!readInt("Enter Stock: ", stock)) {
+                    break;
+                }
+
+                if (stock < 0) {
+                    cout << "Stock cannot be negative.\n";
+                    break;
+                }
 
                 db.addProduct(id, name, price, stock);
                 break;
@@ -73,36 +124,63 @@ void adminMenu(Database& db) {
 
             case 3: {
                 int id;
-                cout << "Enter Product ID to search: ";
-                cin >> id;
+                if (!readInt("Enter Product ID to search: ", id)) {
+                    break;
+                }
                 db.searchProduct(id);
                 break;
             }
 
             case 4: {
                 int id, newStock;
-                cout << "Enter Product ID: ";
-                cin >> id;
-                cout << "Enter New Stock: ";
-                cin >> newStock;
+                if (!readInt("Enter Product ID: ", id) ||
+                    !readInt("Enter New Stock: ", newStock)) {
+                    break;
+                }
+
+                if (id <= 0) {
+                    cout << "Product ID must be greater than 0.\n";
+                    break;
+                }
+
+                if (newStock < 0) {
+                    cout << "Stock cannot be negative.\n";
+                    break;
+                }
                 db.updateStock(id, newStock);
                 break;
             }
 
             case 5: {
                 int id;
-                cout << "Enter Product ID to remove: ";
-                cin >> id;
+                if (!readInt("Enter Product ID to remove: ", id)) {
+                    break;
+                }
+
+                if (id <= 0) {
+                    cout << "Product ID must be greater than 0.\n";
+                    break;
+                }
                 db.deleteProduct(id);
                 break;
             }
 
             case 6: {
                 int id, qty;
-                cout << "Enter Product ID: ";
-                cin >> id;
-                cout << "Enter Quantity: ";
-                cin >> qty;
+                if (!readInt("Enter Product ID: ", id) ||
+                    !readInt("Enter Quantity: ", qty)) {
+                    break;
+                }
+
+                if (id <= 0) {
+                    cout << "Product ID must be greater than 0.\n";
+                    break;
+                }
+
+                if (qty <= 0) {
+                    cout << "Quantity must be greater than 0.\n";
+                    break;
+                }
                 db.sellProduct(id, qty);
                 break;
             }
@@ -133,6 +211,21 @@ void adminMenu(Database& db) {
                 cout << "Enter Role (admin/cashier): ";
                 cin >> role;
 
+                if (uname.find_first_not_of(" \t\r\n") == string::npos) {
+                    cout << "Username cannot be empty.\n";
+                    break;
+                }
+
+                if (pass.find_first_not_of(" \t\r\n") == string::npos) {
+                    cout << "Password cannot be empty.\n";
+                    break;
+                }
+
+                if (role != "admin" && role != "cashier") {
+                    cout << "Role must be either 'admin' or 'cashier'.\n";
+                    break;
+                }
+
                 db.addUser(uname, pass, role);
                 break;
             }
@@ -141,6 +234,12 @@ void adminMenu(Database& db) {
                 string uname;
                 cout << "Enter Username to remove: ";
                 cin >> uname;
+
+                if (uname.find_first_not_of(" \t\r\n") == string::npos) {
+                    cout << "Username cannot be empty.\n";
+                    break;
+                }
+
                 db.removeUser(uname);
                 break;
             }
@@ -165,8 +264,9 @@ void cashierMenu(Database& db) {
         cout << "2. Sell Product\n";
         cout << "3. Low stock Alerts\n";
         cout << "4. Exit\n";
-        cout << "Enter choice: ";
-        cin >> choice;
+        if (!readInt("Enter choice: ", choice)) {
+            continue;
+        }
 
         switch (choice) {
             case 1:
@@ -175,10 +275,20 @@ void cashierMenu(Database& db) {
 
             case 2: {
                 int id, qty;
-                cout << "Enter Product ID: ";
-                cin >> id;
-                cout << "Enter Quantity: ";
-                cin >> qty;
+                if (!readInt("Enter Product ID: ", id) ||
+                    !readInt("Enter Quantity: ", qty)) {
+                    break;
+                }
+
+                if (id <= 0) {
+                    cout << "Product ID must be greater than 0.\n";
+                    break;
+                }
+
+                if (qty <= 0) {
+                    cout << "Quantity must be greater than 0.\n";
+                    break;
+                }
                 db.sellProduct(id, qty);
                 break;
             }
@@ -199,48 +309,53 @@ void cashierMenu(Database& db) {
 }
 
 int main() {
-    Database db;
+    try {
+        Database db;
 
-    string username, password;
-    string role = "";
-    int attempts = 3;
+        string username, password;
+        string role = "";
+        int attempts = 3;
 
-    cout << "=======LOGIN======\n";
+        cout << "=======LOGIN======\n";
 
-    while (attempts > 0) {
-        cout << "Username: ";
-        cin >> username;
-        cin.ignore();
+        while (attempts > 0) {
+            cout << "Username: ";
+            cin >> username;
+            cin.ignore();
 
-        cout << "Password: ";
-        password = getHiddenPassword();
+            cout << "Password: ";
+            password = getHiddenPassword();
 
-        role = db.login(username, password);
+            role = db.login(username, password);
 
-        if (!role.empty()) {
-            break;
+            if (!role.empty()) {
+                break;
+            }
+
+            attempts--;
+
+            if (attempts > 0) {
+                cout << "Invalid credentials! " << attempts << " attempt(s) remaining.\n\n";
+            }
         }
 
-        attempts--;
-
-        if (attempts > 0) {
-            cout << "Invalid credentials! " << attempts << " attempt(s) remaining.\n\n";
+        if (role.empty()) {
+            cout << "Too many failed attempts. Exiting...\n";
+            return 0;
         }
-    }
 
-    if (role.empty()) {
-        cout << "Too many failed attempts. Exiting...\n";
-        return 0;
-    }
+        cout << "\nLogin Successful! Welcome, " << username << "! Role: " << role << "\n";
 
-    cout << "\nLogin Successful! Welcome, " << username << "! Role: " << role << "\n";
-
-    if (role == "admin") {
-        adminMenu(db);
-    } else if (role == "cashier") {
-        cashierMenu(db);
-    } else {
-        cout << "Unknown role. Exiting...\n";
+        if (role == "admin") {
+            adminMenu(db);
+        } else if (role == "cashier") {
+            cashierMenu(db);
+        } else {
+            cout << "Unknown role. Exiting...\n";
+        }
+    } catch (const std::exception& ex) {
+        cerr << "Application error: " << ex.what() << '\n';
+        return 1;
     }
 
     return 0;
