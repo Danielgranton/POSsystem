@@ -1,6 +1,8 @@
 # Build outputs
 backend/pos
 backend/pos_test
+frontend/build/
+frontend/.qtcreator/
 *.o
 
 # Environment files
@@ -9,5 +11,6 @@ backend/pos_test
 !.env.example
 
 # Editor and OS files
+.vscode/
 .DS_Store
 Thumbs.db
