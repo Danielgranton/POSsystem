@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
+#include "admindashboard.h"
 
 #include <QColor>
 #include <QFrame>
@@ -419,6 +420,16 @@ MainWindow::MainWindow(QWidget *parent)
                 feedback->clear();
                 QMessageBox::information(this, "Access granted",
                     "Welcome, " + user + "!\nRole: " + role);
+
+                if (role == "admin") {
+                    auto* dashboard = new AdminDashboard();
+                    dashboard->setAttribute(Qt::WA_DeleteOnClose);
+                    connect(dashboard, &QObject::destroyed, this, [this]() {
+                        this->show();
+                    });
+                    dashboard->show();
+                    this->hide();
+                }
                 return;
             }
 

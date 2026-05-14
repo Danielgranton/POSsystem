@@ -347,7 +347,7 @@ int main() {
         cout << "\nLogin Successful! Welcome, " << username << "! Role: " << role << "\n";
 
         if (role == "admin") {
-            adminMenu(db);
+            adminMenu(db);ss
         } else if (role == "cashier") {
             cashierMenu(db);
         } else {

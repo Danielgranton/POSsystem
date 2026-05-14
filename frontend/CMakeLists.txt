@@ -12,11 +12,16 @@ qt_add_executable(POSsystem
     WIN32 MACOSX_BUNDLE
 
     main.cpp
+    backendservice.cpp
+    backendservice.h
     authdatabase.cpp
     authdatabase.h
     mainwindow.cpp
     mainwindow.h
     mainwindow.ui
+
+    admindashboard.cpp
+    admindashboard.h
 )
 
 target_link_libraries(POSsystem
